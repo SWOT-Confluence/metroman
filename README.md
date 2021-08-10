@@ -2,8 +2,6 @@
 
 MetroMan docker container hosted on AWS ECR used to create containers in the cloud.
 
-***NOTE: Confluence version input operations currently under development***
-
 # publishing disclaimer
 
 Please **do not share this** repository, algorithm code contained within, or containers with others. 

@@ -3,7 +3,6 @@ contains A0, n, and Q time series.
 """
 
 # Standard imports
-import json
 import os
 from pathlib import Path
 import sys
@@ -22,28 +21,13 @@ from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
 
-FILLVALUE = --999999999999
+def get_reachids(reachtxt):
+    """Extract and return a list of reach identifiers from txt file."""
 
-def get_reachids(reachjson):
-    """Extract and return a list of reach identifiers from json file.
-    
-    Parameters
-    ----------
-    reachjson : str
-        Path to the file that contains the list of reaches to process
-    
-        
-    Returns
-    -------
-    list
-        List of reaches identifiers
-    """
-
-    # index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
-    index = 0
-    with open(reachjson) as jsonfile:
-        data = json.load(jsonfile)
-    return data[index]
+    index = int(os.environ.get("AWS_BATCH_JOB_ARRAY_INDEX"))
+    with open(reachtxt) as reader:
+        lines = reader.readlines()
+    return lines[index].strip().split(',')
 
 def get_domain_obs(nr):
     """Define and return domain and observations as a tuple."""
@@ -54,8 +38,8 @@ def get_domain_obs(nr):
     DAll.xkm=xkm[0:nr] #reach midpoint distance downstream [m]
     L=array([50e3, 50e3, 50e3, 50e3, 50e3, 50e3])
     DAll.L=L[0:nr]  #reach lengths, [m]
-    DAll.nt=25 #number of overpasses
-    DAll.t=reshape(linspace(1,25,num=25),[1,25]) #time, [days]
+    DAll.nt=15 #number of overpasses
+    DAll.t=reshape(linspace(1,15,num=15),[1,15]) #time, [days]
     DAll.dt= reshape(diff(DAll.t).T*86400 * ones((1,DAll.nR)),(DAll.nR*(DAll.nt-1),1))
 
     AllObs=Observations(DAll)
@@ -65,31 +49,22 @@ def get_domain_obs(nr):
 
     return DAll, AllObs
 
-def retrieve_obs(reachlist, inputdir, DAll, AllObs):
+def retrieve_obs(DAll, inputdir, reachids, AllObs):
     """ Retrieves data from SWOT and SoS files, populates observation object and
     returns qbar."""
 
     Qbar=empty([DAll.nR])
     i=0
-    for reach in reachlist:
-        swotfile=inputdir.joinpath('swot', reach["swot"])
+    for reachid in reachids:
+        swotfile=inputdir.joinpath('swot', f"{reachid}_SWOT.nc")
+        sosfile=inputdir.joinpath('sos', f"{reachid}_SOS.nc")
+        sos_dataset = Dataset(sosfile)
         swot_dataset = Dataset(swotfile)
         AllObs.h[i,:]=swot_dataset["reach/wse"][0:DAll.nt]
         AllObs.w[i,:]=swot_dataset["reach/width"][0:DAll.nt]
-        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt]
-        swot_dataset.close()
-
-        # sosfile=inputdir.joinpath('sos', reach["sos"])
-        # sos_dataset=Dataset(sosfile)
-        # Qbar[i]=sos_dataset["reach/Qhat"][:]
-        # sos_dataset.close()
-
+        AllObs.S[i,:]=swot_dataset["reach/slope2"][0:DAll.nt]      
+        Qbar[i]=sos_dataset["reach/Qhat"][:]
         i += 1
-
-    print(AllObs.h)
-    print(AllObs.w)
-    print(AllObs.S)
-
     # Reshape observations
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
@@ -178,22 +153,20 @@ def write_output(outputdir, reachids, Estimate):
     dataset.close()
 
 def main():
-    # inputdir = Path("/mnt/data/input")
-    # outputdir = Path("/mnt/data/output")
-    inputdir = Path("/home/nikki/Documents/confluence/workspace/flpe/data/input")
-    outputdir = Path("/home/nikki/Documents/confluence/workspace/flpe/data/output/metroman")
+    inputdir = Path("/mnt/data/input")
+    outputdir = Path("/mnt/data/output")
     try:
-        reachjson = inputdir.joinpath(sys.argv[1])
+        reachtxt = inputdir.joinpath(sys.argv[1])
     except IndexError:
-        reachjson = inputdir.joinpath("sets.json") 
+        reachtxt = inputdir.joinpath("reach_sets.txt") 
 
-    reachlist = get_reachids(reachjson)
-    DAll, AllObs = get_domain_obs(len(reachlist))
-    Qbar = retrieve_obs(reachlist, inputdir, DAll, AllObs)
-    # C, R, Exp, P = set_up_experiment(DAll, Qbar)
-    # Estimate = process(DAll, AllObs, Exp, P, R, C)
+    reachids = get_reachids(reachtxt)
+    DAll, AllObs = get_domain_obs(len(reachids))
+    Qbar = retrieve_obs(DAll, inputdir, reachids, AllObs)
+    C, R, Exp, P = set_up_experiment(DAll, Qbar)
+    Estimate = process(DAll, AllObs, Exp, P, R, C)
     
-    # write_output(outputdir, reachids, Estimate)
+    write_output(outputdir, reachids, Estimate)
 
 if __name__ == "__main__":
    main()    
