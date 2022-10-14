@@ -258,9 +258,10 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose):
     Obs=CalcdA(D,Obs)
     AllObs=CalcdA(DAll,AllObs)
     ShowFigs=False
-    DebugMode=True
+    DebugMode=False
 
-    Smin=1.7e-5
+    #Smin=1.7e-5
+    Smin=5e-5
     Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
     AllObs.S[AllObs.S<Smin]=putmask(AllObs.S,AllObs.S<Smin,Smin)
 
