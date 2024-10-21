@@ -537,6 +537,7 @@ def main():
         Estimate.A0hat=np.full([DAll.nR],fillvalue)
         Estimate.QhatUnc_HatAllAll=np.full([DAll.nR,DAll.nt],fillvalue)
         Estimate.AllQ=np.full([DAll.nR,DAll.nt],fillvalue)
+        overlap_ts=np.full([DAll.nt],fillvalue)
 
         DAll.nt -= nDelete
         nDelete=0
