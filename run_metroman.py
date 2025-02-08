@@ -23,7 +23,7 @@ from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Exp
 from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
-from sos_read.sos_read import download_sos
+
 
 def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     """Extract and return a list of reach identifiers from json file.
@@ -54,6 +54,7 @@ def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     if sos_bucket:
         sos_file = tmp_dir.joinpath(data[index][0]["sos"])    # just grab first in set
         if sos_bucket != 'local':
+	    from sos_read.sos_read import download_sos
             download_sos(sos_bucket, sos_file)
     
     return data[index]
