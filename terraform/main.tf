@@ -28,7 +28,7 @@ locals {
   } : var.default_tags
 }
 
-module "confluence-input" {
+module "confluence-metroman" {
   source      = "./modules/metroman"
   app_name    = var.app_name
   app_version = var.app_version
