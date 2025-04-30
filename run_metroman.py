@@ -23,7 +23,7 @@ from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Exp
 from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
-from sos_read.sos_read import download_sos
+
 
 def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     """Extract and return a list of reach identifiers from json file.
@@ -53,7 +53,9 @@ def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
 
     if sos_bucket:
         sos_file = tmp_dir.joinpath(data[index][0]["sos"])    # just grab first in set
-        download_sos(sos_bucket, sos_file)
+        if sos_bucket != 'local':
+            from sos_read.sos_read import download_sos
+            download_sos(sos_bucket, sos_file)
     
     return data[index]
 
@@ -458,7 +460,7 @@ def create_args():
     arg_parser.add_argument('-s',
                             '--sosbucket',
                             type=str,
-                            help='Name of the SoS bucket and key to download from',
+                            help='Name of the SoS bucket and key to download from, set to "local" to not download an sos',
                             default='')
     return arg_parser
 
@@ -489,7 +491,10 @@ def main():
     if index_to_run == -235 or "AWS_BATCH_JOB_ID" in os.environ:
         inputdir = Path("/mnt/data/input")    
         outputdir = Path("/mnt/data/output/sets")
-        tmpdir = Path("/tmp")
+        if args.sosbucket != 'local':
+            tmpdir = Path("/tmp")
+        else:
+            tmpdir = Path(os.path.join(inputdir, 'sos'))
     else:
         inputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/input")
         outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
