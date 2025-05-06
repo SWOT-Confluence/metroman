@@ -10,9 +10,47 @@ from metroman.MetroManVariables import Estimates
 from metroman.calcnhat import calcnhat
 
 def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
-    
-    #1) estimates on the chain A0, n, q: means & covariances
+
+    '''
+        CalculateEstimates
+            C: Markov Chain Monte Carlo chain object
+            D: Domain
+            Prior: prior estimates
+ 
+            if CalculateEstimates is called with C = None, then prior estimates are calculated, but nothing else
+ 
+        returns E, estimate object
+    '''
+
+    #0) initialize estimates object
     E=Estimates(D,DAll)
+ 
+    #1) calculate Q prior estimate
+    nhat=empty([D.nR,D.nt])
+    for r in range(0,D.nR):
+        nhat[r,:]=calcnhat(Obs.w[r,:],Obs.h[r,:],AllObs.hmin[r], \
+                           Prior.meanA0[r]*ones([1,D.nt])+Obs.dA[r,:], \
+                           Prior.meanx1[r],Prior.meanna[r],nOpt); 
+
+    E.QhatPrior=1/nhat * (Prior.meanA0.reshape(D.nR,1)@ones([1,D.nt])+Obs.dA)**(5/3) \
+                *Obs.w**(-2/3)*sqrt(Obs.S);
+    
+    nhat=empty([D.nR,DAll.nt])
+    nhat[:]=nan
+    for r in range(0,D.nR):
+        nhat[r,:]=calcnhat(AllObs.w[r,:],AllObs.h[r,:],AllObs.hmin[r], \
+                           Prior.meanA0[r]-AllObs.A0Shift[r]+AllObs.dA[r,:], \
+                           Prior.meanx1[r],Prior.meanna[r],nOpt);                
+
+    E.QhatAllPrior=1/nhat*((Prior.meanA0-AllObs.A0Shift).reshape(D.nR,1)@ones([1,DAll.nt])+AllObs.dA)**(5/3) \
+                   *AllObs.w**(-2/3)*sqrt(AllObs.S);
+
+    # if we are running in prior only mode, return the estimates now
+    if not C:
+        return E,None
+
+    
+    #2) estimates on the chain A0, n, q: means & covariances
     E.A0hat=mean(C.thetaA0[:,C.Nburn+1:C.N],1)    
     E.CA0=cov(C.thetaA0[:,C.Nburn+1:C.N])
     E.stdA0Post=sqrt(diagonal(E.CA0)) 
@@ -29,7 +67,7 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
         E.nhat[i,:]=calcnhat(Obs.w[i,:], Obs.h[i,:], Obs.hmin[i], E.A0hat[i]+Obs.dA[i,:], E.x1hat[i], E.nahat[i], nOpt)
         E.nhatAll[i,:]=calcnhat(AllObs.w[i,:], AllObs.h[i,:], AllObs.hmin[i], E.A0hat[i]+AllObs.dA[i,:]-AllObs.A0Shift[i], E.x1hat[i], E.nahat[i], nOpt)
     
-    #2) calculate the Q chain, and estimate mean and std
+    #3) calculate the Q chain, and estimate mean and std
     nhat=empty([D.nR,D.nt])
     nhat[:]=nan
     nhatAll=empty([D.nR,DAll.nt])
@@ -55,24 +93,6 @@ def CalculateEstimates(C,D,Obs,Prior,DAll,AllObs,nOpt):
     E.QhatPost=mean(C.thetaQ[C.Nburn:,:,:],0)
     E.QstdPost=std(C.thetaQ[C.Nburn:,:,:],0)
     
-    #3) calculate Q prior estimate
-    for r in range(0,D.nR):
-        nhat[r,:]=calcnhat(Obs.w[r,:],Obs.h[r,:],AllObs.hmin[r], \
-                           Prior.meanA0[r]*ones([1,D.nt])+Obs.dA[r,:], \
-                           Prior.meanx1[r],Prior.meanna[r],nOpt); 
-
-    E.QhatPrior=1/nhat * (Prior.meanA0.reshape(D.nR,1)@ones([1,D.nt])+Obs.dA)**(5/3) \
-                *Obs.w**(-2/3)*sqrt(Obs.S);
-    
-    nhat=empty([D.nR,DAll.nt])
-    nhat[:]=nan
-    for r in range(0,D.nR):
-        nhat[r,:]=calcnhat(AllObs.w[r,:],AllObs.h[r,:],AllObs.hmin[r], \
-                           Prior.meanA0[r]-AllObs.A0Shift[r]+AllObs.dA[r,:], \
-                           Prior.meanx1[r],Prior.meanna[r],nOpt);                
-
-    E.QhatAllPrior=1/nhat*((Prior.meanA0-AllObs.A0Shift).reshape(D.nR,1)@ones([1,DAll.nt])+AllObs.dA)**(5/3) \
-                   *AllObs.w**(-2/3)*sqrt(AllObs.S);
     
     
     #4) discharge error budget: all done for Q(nr x nt)  
