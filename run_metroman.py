@@ -190,7 +190,8 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
         AllObs=Observations(DAll)
         AllObs.sigS=1.7e-5
         AllObs.sigh=0.1
-        AllObs.sigw=10
+        #AllObs.sigw=10
+        AllObs.sigw=20
     else:
         AllObs=0.
 
