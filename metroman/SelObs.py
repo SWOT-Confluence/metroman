@@ -4,7 +4,7 @@
 from numpy import reshape,diff,ones,empty,arange,size
 from metroman.MetroManVariables import Observations,Domain,Truth
 
-def SelObs(DAll,Obs,Exp,AllTruth,AllLats): 
+def SelObs(DAll,Obs,Exp,AllTruth,AllLats,areaswitch): 
     
     AllObs=Obs
 
@@ -42,14 +42,21 @@ def SelObs(DAll,Obs,Exp,AllTruth,AllLats):
         Obs.w[i,:]=AllObs.w[i,Exp.iEst]
     for i in range(0,DAll.nR):
         Obs.S[i,:]=AllObs.S[i,Exp.iEst]        
+    if areaswitch == 1:
+        for i in range(0,DAll.nR):
+            Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]        
+
     
     Obs.hv=reshape(Obs.h, (D.nR*D.nt,1) )
     Obs.Sv=reshape(Obs.S, (D.nR*D.nt,1) )
     Obs.wv=reshape(Obs.w, (D.nR*D.nt,1) )
+    if areaswitch == 1:
+        Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
     
     Obs.sigh=AllObs.sigh
     Obs.sigw=AllObs.sigw
     Obs.sigS=AllObs.sigS
+    # note - sigdA is calculated elsewhere, even when areaswitch == 1
     
     if size(AllTruth)>0:     
         #%%select truth
