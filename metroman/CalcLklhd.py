@@ -35,7 +35,8 @@ def CalcLklhd(Obs,AllObs,A0,na,x1,D,Prior,Delta,DeltaA,B,qhatv,nOpt):
     
     #%%1) Calculate dQdx, dQdt, and q for channel mass balance
     dQdxv=Delta @ Qv
-    dAdtv=(DeltaA @ Obs.hv) / D.dt * (B @ Obs.wv)    
+    #dAdtv=(DeltaA @ Obs.hv) / D.dt * (B @ Obs.wv)    
+    dAdtv=(DeltaA @ Obs.dAv) / D.dt 
     
     #%%2) Calculate covariance matrix of theta
     #2.1) Calculate covariance matrix of dQdx

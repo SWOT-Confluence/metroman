@@ -81,7 +81,7 @@ def get_domain_obs(nr):
 
 def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths):
     """ Retrieves data from SWOT and SoS files, populates observation object and
-    returns : Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
+    returns : Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
         overlap_ts: the overlapping time indices without any bad data removed
         SetQuality : 
             0 : nominal: 3+ reaches, 4+ times (make nRmin a parameter, and link everything to ntmin) 
@@ -214,7 +214,8 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
     else:
         SetQuality=0 #initialize to nominal
 
-    # 1.1 check that there are at least some observation times
+    # 1.1 data checks
+    # 1.1.1 check that there are at least some observation times
     if DAll.nt<ntmin_prior:
         if Verbose:
             print('Data issue')
@@ -225,6 +226,21 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         nDelete=0
         return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
 
+    #1.1.2 verify that if we are using constrained width or d_x_area that 
+    #        we have the right data to do so. else, switch modes
+    if areaswitch == 1:
+       for reach in reachlist:
+           swotfile=inputdir.joinpath('swot', reach["swot"])
+           swot_file_exists=os.path.exists(swotfile)
+           if swot_file_exists:
+               swot_dataset = Dataset(swotfile)
+               d_x_area=swot_dataset["reach/d_x_area"][0:nt_reach].filled(np.nan)
+               if np.all(np.isnan(d_x_area)):
+                   print('no good d_x_area for this reach. switching to use finite difference style area calcs')
+                   areaswitch = 0
+
+           else:
+               areaswitch = 0
   
     # 1.2 loop over files and extract data
     i=0
@@ -394,7 +410,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
     if areaswitch == 1:
         AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
 
-    return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
+    return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -419,7 +435,8 @@ def set_up_experiment(DAll, Qbar):
     P.meanQbar=mean(Qbar)
     #P.covQbar=0.5
     P.covQbar=0.25
-    P.eQm=0.
+    P.eQm=0.075
+    #P.eQm=0.0
     P.Geomorph.Use=False
     # this is for Laterals=false
     P.AllLats.q=zeros((DAll.nR,DAll.nt))
@@ -607,8 +624,8 @@ def main():
         tmpdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/tmp")
 
     # 0.4 specify width constraint, and area switches
-    areaswitch=0 #  0: original; 1: use river hypsometry
-    constrainwidths=False
+    areaswitch=1 #  0: original; 1: use river hypsometry
+    constrainwidths=True
 
     # 1 get data
     # 1.0 figure out json file. pull from command line arg or set to default
@@ -628,8 +645,8 @@ def main():
             sosdir = tmpdir
         else:
             sosdir = inputdir.joinpath("sos")
-        Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts = retrieve_obs(reachlist,inputdir,sosdir,Verbose,
-                                                                              areaswitch,constrainwidths)
+        Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch = retrieve_obs(
+            reachlist,inputdir,sosdir,Verbose,areaswitch,constrainwidths)
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")
