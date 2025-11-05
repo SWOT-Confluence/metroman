@@ -385,7 +385,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         iDelete=0
         nDelete=0
         
-        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts	
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts, areaswitch
 	
     DAll.dt=empty(DAll.nt-1)
     for i in range(DAll.nt-1):
