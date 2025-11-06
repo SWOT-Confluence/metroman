@@ -18,6 +18,8 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
             allA0min[i,0]=1e-3
         else:
             allA0min[i,0]=-min(AllObs.dA[i,:])+1e-3
+    if Verbose:
+        print('Process prior: allA0min=',allA0min)
           
     Obs.hmin=Obs.h.min(1)
     AllObs.hmin=AllObs.h.min(1)
@@ -233,6 +235,9 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
     Prior.stdna=std(thetana[:,Nburn+1:N],axis=1  )
     Prior.meanx1=mean(thetax1[:,Nburn+1:N],axis=1  )
     Prior.stdx1=std(thetax1[:,Nburn+1:N],axis=1  )
+
+    if Verbose:
+        print('Prior meanAllA0=',Prior.meanAllA0)
     
     #%% 5. calculate minimum values for A0 for the estimation window
     #5.1 calculate minimum values for A0 for the estimation window
@@ -243,7 +248,8 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
         else:
             estA0min[i,:]=-min(Obs.dA[i,:] )
     #5.3 shift the "all" A0 into the estimate window
-    AllObs.A0Shift=AllObs.dA[:,E.iEst[0]] #different than the Matlab version... should be ok?
+    #AllObs.A0Shift=AllObs.dA[:,E.iEst[0]] # only works for areaswitch=1
+    AllObs.A0Shift=AllObs.dA[:,0] -AllObs.dA[:,E.iEst[0]] #edit from 5 Nov 2025. derived in notebook
     
     #5.4 save the more restrictive limit
     Amin=1; #this is the lowest value that we will let A0+dA take
@@ -254,5 +260,8 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
     #5.5 set up prior A0 variable by shifting into estimation window
     Prior.meanA0=Prior.meanAllA0+AllObs.A0Shift
     Prior.stdA0=Prior.stdAllA0
+
+    if Verbose:
+        print('Prior meanA0=',Prior.meanA0)
     
     return Prior,jmp

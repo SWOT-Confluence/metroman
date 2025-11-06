@@ -431,7 +431,8 @@ def set_up_experiment(DAll, Qbar):
     tUseMax=min(31,DAll.nt)
 
     #Exp.tUse=array([1,	31])
-    Exp.tUse=array([1,	tUseMax-1]) #should this be 0,tUse? why is it tUseMax-1?
+    #Exp.tUse=array([1,	tUseMax-1]) #should this be 0,tUse? why is it tUseMax-1?
+    Exp.tUse=array([0,	tUseMax]) #why is it tUseMax-1?
 
     Exp.nOpt=5
 

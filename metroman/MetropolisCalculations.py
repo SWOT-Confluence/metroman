@@ -60,6 +60,9 @@ def MetropolisCalculations(Prior,D,Obs,jmp,C,R,DAll,AllObs,nOpt,DebugMode,Verbos
     elif nOpt==5:
         pu3=lognorm.pdf(thetaux1,sigmax1,0,exp(mux1))
     
+    print('thetauA0=',thetauA0)
+    print('dA=',Obs.dA)
+
     fu=CalcLklhd(Obs,AllObs,thetauA0,thetauna,thetaux1,D,Prior,Delta,DeltaA,B,thetauq,nOpt)
     
     C.n_a1=0
