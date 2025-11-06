@@ -224,7 +224,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         SetQuality=2
         iDelete=0
         nDelete=0
-        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
     #1.1.2 verify that if we are using constrained width or d_x_area that 
     #        we have the right data to do so. else, switch modes
@@ -238,8 +238,11 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
                if np.all(np.isnan(d_x_area)):
                    print('no good d_x_area for this reach. switching to use finite difference style area calcs')
                    areaswitch = 0
-
-           else:
+               h_break=swot_dataset['reach']['hwfit']['h_break'][:].filled(np.nan)
+               if min(h_break)<0:
+                   print('some bad height break data found. switching to use finite difference style area calcs')
+                   areaswitch=0
+           else: #if there's not a swot file
                areaswitch = 0
   
     # 1.2 loop over files and extract data
@@ -273,7 +276,8 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
             # overlap_ts = []
             overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
 
-            return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts 
+            return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+
 
         # 1.2.3 read height, width and slope; optionally cross-sectional area
         h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
