@@ -232,15 +232,15 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
        for reach in reachlist:
            swotfile=inputdir.joinpath('swot', reach["swot"])
            swot_file_exists=os.path.exists(swotfile)
-           if swot_file_exists:
+           if swot_file_exists and areaswitch == 1:
                swot_dataset = Dataset(swotfile)
                d_x_area=swot_dataset["reach/d_x_area"][0:nt_reach].filled(np.nan)
                if np.all(np.isnan(d_x_area)):
-                   print('no good d_x_area for this reach. switching to use finite difference style area calcs')
+                   print('no good d_x_area for a reach in this set.  switching to use finite difference style area calcs')
                    areaswitch = 0
                h_break=swot_dataset['reach']['hwfit']['h_break'][:].filled(np.nan)
                if min(h_break)<0:
-                   print('some bad height break data found. switching to use finite difference style area calcs')
+                   print('some bad height break data found for a reach in this set. switching to use finite difference style area calcs')
                    areaswitch=0
            else: #if there's not a swot file
                areaswitch = 0

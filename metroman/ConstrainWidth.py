@@ -39,7 +39,10 @@ def ConstrainWidth(h,w,area_fit,nt):
 
             hhat[j]=h[j]
             what[j] = p0 + p1 * hhat[j]
-    elif constrain_mode ==1:
+    if any(what<0):
+        print('hypsometric constraint configured incorrectly and some widths were negative. setting all widths to average value')
+        constrain_mode=1
+    if constrain_mode ==1:
         what=np.full( (nt,), np.nanmean(w) )
 
     return hhat,what
