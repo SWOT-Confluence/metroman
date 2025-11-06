@@ -131,6 +131,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
             swot_dataset.close()
         else:
             nt_reach=0
+            allts[reach['reach_id']]=[]
 
     # determine overlapping measured times and a filter for each reach indicating which times
     #    for that reach are in the overlap
@@ -464,7 +465,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
         Obs=CalcdA(D,Obs)
         AllObs=CalcdA(DAll,AllObs)
     ShowFigs=False
-    DebugMode=False # remember to switch back!
+    DebugMode=False
 
     #Smin=1.7e-5
     Smin=5e-5

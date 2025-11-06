@@ -71,6 +71,9 @@ def MetropolisCalculations(Prior,D,Obs,jmp,C,R,DAll,AllObs,nOpt,DebugMode,Verbos
     
     C.Like=empty((C.N))
     C.LogLike=empty((C.N))
+
+    if Verbose:
+        print('prior to iterations, fu=',fu,'pu1=',pu1,'pu2=',pu2,'pu3=',pu3)
     
     #%%
     tic=time.process_time()

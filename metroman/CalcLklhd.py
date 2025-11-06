@@ -29,9 +29,10 @@ def CalcLklhd(Obs,AllObs,A0,na,x1,D,Prior,Delta,DeltaA,B,qhatv,nOpt):
     Qv=1/nv*(A0v+Obs.dAv)**(5/3)*Obs.wv**(-2/3)*Obs.Sv**(1/2)
     
 
-    if (Obs.hv<0).any() | (A0v<0).any() | (Obs.Sv<0).any():
+    #if (Obs.hv<0).any() | (A0v<0).any() | (Obs.Sv<0).any():
+    if  (A0v<0).any() | (Obs.Sv<0).any():
         f=0
-        return
+        return f
     
     #%%1) Calculate dQdx, dQdt, and q for channel mass balance
     dQdxv=Delta @ Qv
