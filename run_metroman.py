@@ -196,7 +196,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         dt=(tall[i]-tall[0])
         talli[i]=dt.days + dt.seconds/86400.
 
-    if swot_file_exists:   
+    if swot_file_exists and DAll.nt > 0:   
         AllObs=Observations(DAll)
         AllObs.sigS=1.7e-5
         AllObs.sigh=0.1
