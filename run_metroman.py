@@ -87,6 +87,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
             0 : nominal: 3+ reaches, 4+ times (make nRmin a parameter, and link everything to ntmin) 
             1 : fewer reaches or fewer observation times
             2 : no reach with any good observation time
+            3 : there exists a reach in the set that does not have a SWOT timeseries file
 
         areaswitch : 
             0 : use original MetroMan-style finite difference area calculations
@@ -120,6 +121,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
 
     # extract measured times
     allts=dict()
+    missing_file=False
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_file_exists=os.path.exists(swotfile)
@@ -132,6 +134,8 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         else:
             nt_reach=0
             allts[reach['reach_id']]=[]
+            missing_file=True
+            print('at least one SWOT timeseries not found. setting missing_file flag to True')
 
     # determine overlapping measured times and a filter for each reach indicating which times
     #    for that reach are in the overlap
@@ -216,6 +220,14 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         SetQuality=0 #initialize to nominal
 
     # 1.1 data checks
+    # 1.1.0 check that all files exist
+    if missing_file:
+        print('at least one file is missing. setting SetQuality=3')
+        SetQuality=3
+        iDelete=0
+        nDelete=0
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+
     # 1.1.1 check that there are at least some observation times
     if DAll.nt<ntmin_prior:
         if Verbose:
@@ -660,7 +672,7 @@ def main():
         return
 
     # 2. run metroman
-    if SetQuality == 2:
+    if SetQuality >= 2:
         #2.0 if inversion set is invalid, set data to fill values 
         fillvalue=-999999999999
 	    #define and write fill value data
@@ -703,8 +715,11 @@ def main():
         print("SUCCESS. MetroMan ran for this set. ")
     
     #3. write output files
-    reachids = [ str(e["reach_id"]) for e in reachlist ]
-    write_output(outputdir, reachids, Estimate,P,iDelete,nDelete,SetQuality,overlap_ts)
+    if SetQuality < 3:
+        reachids = [ str(e["reach_id"]) for e in reachlist ]
+        write_output(outputdir, reachids, Estimate,P,iDelete,nDelete,SetQuality,overlap_ts)
+    else:
+        print('MetroMan will not write output file for this set')
 
 if __name__ == "__main__":
    main()    
