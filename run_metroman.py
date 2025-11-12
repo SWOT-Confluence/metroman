@@ -448,6 +448,7 @@ def set_up_experiment(DAll, Qbar):
     Exp.tUse=array([0,	tUseMax]) #why is it tUseMax-1?
 
     Exp.nOpt=5
+    #Exp.nOpt=4
 
     P=Prior(DAll)
     P.meanQbar=mean(Qbar)
@@ -485,6 +486,34 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
     AllObs.S[AllObs.S<Smin]=putmask(AllObs.S,AllObs.S<Smin,Smin)
 
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
+
+    # check on case where erroneous low values of dA prevent ProcessPrior correctly estimating Qbar
+    if not np.all(P.Success):
+        itermax=3
+        iter_p=0
+        pitersdone=False
+        while not pitersdone:
+            iter_p+=1
+            print('Process Prior Unsuccessful. Clipping dA, iteration=',iter_p)
+            print('Before clip dA=',AllObs.dA)
+            for i in range(DAll.nR):
+                if not P.Success[i]:
+                    mindA_set=np.quantile(AllObs.dA[i,:],.1*iter_p)
+                    dAclip=np.clip(AllObs.dA[i,:],mindA_set,np.inf)
+                    AllObs.dA[i,:]=dAclip
+            # recalculate derived estimates
+            for i in range(0,DAll.nR):
+                Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]
+            AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
+            Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
+
+            print('After clip dA=',AllObs.dA)
+            P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
+
+            if iter_p == itermax or np.all(P.Success):
+                pitersdone=True
+
+    print('after process prior. areaswich=',areaswitch)
 
     if SetQuality == 1:
         print('SetQuality=',SetQuality,'. returning from process function with only priors')

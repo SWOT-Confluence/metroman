@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from numpy import empty,ones,zeros,mean,std,median,exp,maximum
+from numpy import empty,ones,zeros,mean,std,median,exp,maximum,max,full
 from numpy.random import randn,rand,seed
 from scipy.stats import lognorm
 import time
@@ -238,6 +238,17 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
 
     if Verbose:
         print('Prior meanAllA0=',Prior.meanAllA0)
+
+    if Verbose:
+       print('Target Qbar=',Prior.meanQbar)
+       print('Prior thetaQ=',mean(thetaQ,axis=1))
+
+    #Prior.Success=True
+    Prior.Success=full( (DAll.nR,), True)
+    for i in range(DAll.nR):
+        if (mean(thetaQ[i,:])-Prior.meanQbar)/Prior.meanQbar > Prior.covQbar:
+            Prior.Success[i]=False
+            print('ProcessPrior Unable to hit acceptable Q estimate for reach',i)
     
     #%% 5. calculate minimum values for A0 for the estimation window
     #5.1 calculate minimum values for A0 for the estimation window
@@ -263,5 +274,6 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
 
     if Verbose:
         print('Prior meanA0=',Prior.meanA0)
+        print('A0min=',jmp.A0min)
     
     return Prior,jmp
