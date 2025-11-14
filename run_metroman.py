@@ -485,6 +485,13 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
     Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
     AllObs.S[AllObs.S<Smin]=putmask(AllObs.S,AllObs.S<Smin,Smin)
 
+    # recenter dA on zero
+    for i in range(DAll.nR):
+        AllObs.dA[i,:]=AllObs.dA[i,:]-np.nanmedian(AllObs.dA[i,:])
+        Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]
+    AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
+    Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
+
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
 
     # check on case where erroneous low values of dA prevent ProcessPrior correctly estimating Qbar
