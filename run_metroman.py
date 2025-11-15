@@ -203,9 +203,11 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
     if swot_file_exists and DAll.nt > 0:   
         AllObs=Observations(DAll)
         AllObs.sigS=1.7e-5
-        AllObs.sigh=0.1
+        #AllObs.sigh=0.1
+        AllObs.sigh=0.15
         #AllObs.sigw=10
-        AllObs.sigw=20
+        #AllObs.sigw=20
+        AllObs.sigw=np.nan #set to nan to trigger proportional estimate after widths read in
     else:
         AllObs=0.
 
@@ -348,6 +350,12 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
 
     DAll.L=reach_length
     DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
+
+    # 1.3 optionally set width uncertainties
+    if np.isnan(AllObs.sigw):
+        wbar=np.nanmean(AllObs.w)
+        AllObs.sigw=0.2*wbar
+        print('set sigw to based on 20% ratio to average width',AllObs.sigw)
 
     # 2. select observations that are NOT equal to the fill value
 
