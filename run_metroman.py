@@ -486,8 +486,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
         Obs=CalcdA(D,Obs)
         AllObs=CalcdA(DAll,AllObs)
     ShowFigs=False
-    #DebugMode=False
-    DebugMode=True #dont forget to switch back!
+    DebugMode=False
 
     #Smin=1.7e-5
     Smin=5e-5
