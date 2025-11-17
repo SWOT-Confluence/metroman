@@ -9,7 +9,7 @@ from metroman.logninvstat import logninvstat
 from metroman.calcnhat import calcnhat
 from metroman.MetroManVariables import Jump
 
-def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
+def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.05):
     #%% 1 handle input prior information
     #% note that A0min is refined for inclusion in the "jmp" variable at the bottom
     allA0min=empty((DAll.nR,1))
@@ -34,18 +34,18 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose):
             meanx1[r]=-0.1
             meanna[r]=0.04
             covx1=0.25
-            covna=0.05
+            #covna=0.05
         elif E.nOpt==4:
             meanx1[r]=-0.25
             covx1=1
             meanna[r]=0.04
-            covna=.05
+            #covna=.05
         elif E.nOpt==5:
             covd=0.3; #Moody and troutman
             meanx1[r]=A0u[r]/mean(AllObs.w[r,:])*covd
             covx1=0.5
             meanna[r]=0.03
-            covna=0.05
+            #covna=0.05
 
        
     #%% 3 initial probability calculations

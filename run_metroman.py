@@ -486,7 +486,8 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
         Obs=CalcdA(D,Obs)
         AllObs=CalcdA(DAll,AllObs)
     ShowFigs=False
-    DebugMode=False
+    #DebugMode=False
+    DebugMode=True #dont forget to switch back!
 
     #Smin=1.7e-5
     Smin=5e-5
@@ -501,6 +502,20 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
     Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
 
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
+
+    # if ProcessPrior doesn't work, try allowing resistance to increase
+    if not np.all(P.Success):
+        itermax=3
+        iter_p=0
+        pitersdone=False
+        while not pitersdone:
+            iter_p+=1
+            covna_i=iter_p*.5
+            print('Process Prior Unsuccessful. Incraesing resistance uncertainty, iteration=',iter_p,'covna=',covna_i,'...')
+            P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose,covna=covna_i)
+            print('... on this iteration, ProcessPrior estimated na=',P.meanna)
+            if iter_p == itermax or np.all(P.Success):
+                pitersdone=True
 
     # check on case where erroneous low values of dA prevent ProcessPrior correctly estimating Qbar
     if not np.all(P.Success):
@@ -523,7 +538,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
             Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
 
             print('After clip dA=',AllObs.dA)
-            P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
+            P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose,covna=1.0)
 
             if iter_p == itermax or np.all(P.Success):
                 pitersdone=True
