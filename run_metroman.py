@@ -24,7 +24,7 @@ from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
 from metroman.ConstrainWidth import ConstrainWidth
-
+from metroman.FilterEstimate import FilterEstimate
 
 def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     """Extract and return a list of reach identifiers from json file.
@@ -412,11 +412,13 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         
         return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts, areaswitch
 	
-    DAll.dt=empty(DAll.nt-1)
-    for i in range(DAll.nt-1):
-         DAll.dt[i]=(talli[i+1]-talli[i])*86400
+    #DAll.dt=empty(DAll.nt-1)
+    #for i in range(DAll.nt-1):
+    #     DAll.dt[i]=(talli[i+1]-talli[i])*86400
 
     DAll.t=reshape(talli,[1,DAll.nt])
+    
+    DAll.dt=reshape(diff(DAll.t).T*86400 * ones((1,DAll.nR)),(DAll.nR*(DAll.nt-1),1))
 
     ## print out h data
     #if areaswitch == 1:
@@ -488,6 +490,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
     ShowFigs=False
     DebugMode=False
 
+
     #Smin=1.7e-5
     Smin=5e-5
     Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
@@ -550,9 +553,11 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
         return Estimate,P
 
     Obs,P2=GetCovMats(D,Obs,Prior) #why does this use Prior instead of P? what is P2?
+    AllObs,P2=GetCovMats(DAll,AllObs,Prior) #why does this use Prior instead of P? what is P2?
 
     C=MetropolisCalculations(P,D,Obs,jmp,C,R,DAll,AllObs,Exp.nOpt,DebugMode,Verbose)
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
+    Estimate=FilterEstimate(Estimate,C,DAll,AllObs)
     return Estimate,P
 
 def write_output(outputdir, reachids, Estimate, Prior,iDelete, nDelete, SetQuality,overlap_ts):
@@ -572,6 +577,7 @@ def write_output(outputdir, reachids, Estimate, Prior,iDelete, nDelete, SetQuali
 
     if SetQuality == 0:
         Estimate.AllQ=np.insert(Estimate.AllQ,iInsert,fillvalue,1)
+        Estimate.QhatPostf=np.insert(Estimate.QhatPostf,iInsert,fillvalue,1)
         Estimate.QhatUnc_HatAllAll=np.insert(Estimate.QhatUnc_HatAllAll,iInsert,fillvalue,1)
     elif SetQuality == 1:
         Estimate.QhatAllPrior=np.insert(Estimate.QhatAllPrior,iInsert,fillvalue,1)
@@ -622,7 +628,8 @@ def write_output(outputdir, reachids, Estimate, Prior,iDelete, nDelete, SetQuali
         A0[:] = Estimate.A0hat
         na[:] = Estimate.nahat
         x1[:] = Estimate.x1hat
-        allq[:] = Estimate.AllQ
+        #allq[:] = Estimate.AllQ
+        allq[:] = Estimate.QhatPostf
         qu[:] = Estimate.QhatUnc_HatAllAll
     elif SetQuality ==1: #estimates  based on process prior only
         A0[:]=Prior.meanA0

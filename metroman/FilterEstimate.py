@@ -7,34 +7,43 @@ from metroman.CalcDelta import CalcDelta
 from metroman.CalcADelta import CalcADelta
 from metroman.CalcB import CalcB
 
-def FilterEstimate(Estimate,C,D,Obs):
+import sys
+
+def FilterEstimate(Estimate,C,DAll,AllObs):
     
-    Deltax = CalcDelta(D.nR,D.nt,D.L)
-    DeltaA = CalcADelta(D.nR,D.nt)
-    B = CalcB(D.nR,D.nt)
+    Deltax = CalcDelta(DAll.nR,DAll.nt,DAll.L)
+    DeltaA = CalcADelta(DAll.nR,DAll.nt)
+
+    B = CalcB(DAll.nR,DAll.nt)
 
     H=-Deltax
-    y=(DeltaA@Obs.hv) / D.dt * (B@Obs.wv)
+
+    y=(DeltaA@AllObs.hv) / DAll.dt * (B@AllObs.wv)
+
     
-    Qchain=empty([D.nR*D.nt,C.N])
+    Qchain=empty([DAll.nR*DAll.nt,C.N])
     Qchain[:]=NaN
     for i in range(0,C.N):
-        Qchain[:,i]=C.thetaQ[i,:,:].reshape(D.nR*D.nt)    
+        Qchain[:,i]=C.thetaAllQ[i,:,:].reshape(DAll.nR*DAll.nt)    
+
     
-    P=diag(var(Qchain,1).reshape(D.nR*D.nt))
-    R=Obs.CA
+    P=diag(var(Qchain,1).reshape(DAll.nR*DAll.nt))
+
+    R=AllObs.CA
 
     K=P@H.T @ linalg.inv((H@P@H.T+R))
-    
-    xminus=empty([D.nR*D.nt,C.N]); xminus[:]=NaN
-    xplus=empty([D.nR*D.nt,C.N]); xplus[:]=NaN
+
+    xminus=empty([DAll.nR*DAll.nt,C.N]); xminus[:]=NaN
+    xplus=empty([DAll.nR*DAll.nt,C.N]); xplus[:]=NaN
     for i in range(0,C.N):
         xminus[:,i]=Qchain[:,i]    
-        xplus[:,i]=xminus[:,i] + (K@(y-H@xminus[:,i].reshape([D.nR*D.nt,1]))).reshape(D.nR*D.nt)
-    
+        xplus[:,i]=xminus[:,i] + (K@(y-H@xminus[:,i].reshape([DAll.nR*DAll.nt,1]))).reshape(DAll.nR*DAll.nt)
+
 
     Qhatfv=mean(xplus[:,C.Nburn-1:C.N-1],1)
-    Estimate.QhatPostf=Qhatfv.reshape([D.nR,D.nt])    
-    Ppostv=diag( (eye(D.nt*D.nR)-K@H)@P )
-    Estimate.QhatPostfUnc=sqrt(Ppostv).reshape([D.nR,D.nt])
+    #Estimate.QhatPostf=Qhatfv.reshape([D.nR,D.nt])    
+    Estimate.QhatPostf=Qhatfv.reshape([DAll.nR,DAll.nt])    
+
+    Ppostv=diag( (eye(DAll.nt*DAll.nR)-K@H)@P )
+    Estimate.QhatPostfUnc=sqrt(Ppostv).reshape([DAll.nR,DAll.nt])
     return Estimate
