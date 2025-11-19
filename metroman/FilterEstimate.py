@@ -2,7 +2,7 @@
 Module for filtering estimate
 """
 
-from numpy import empty,NaN,diag,var,linalg,mean,eye,sqrt
+from numpy import empty,nan,diag,var,linalg,mean,eye,sqrt
 from metroman.CalcDelta import CalcDelta
 from metroman.CalcADelta import CalcADelta
 from metroman.CalcB import CalcB
@@ -22,7 +22,7 @@ def FilterEstimate(Estimate,C,DAll,AllObs):
 
     
     Qchain=empty([DAll.nR*DAll.nt,C.N])
-    Qchain[:]=NaN
+    Qchain[:]=nan
     for i in range(0,C.N):
         Qchain[:,i]=C.thetaAllQ[i,:,:].reshape(DAll.nR*DAll.nt)    
 
@@ -33,8 +33,8 @@ def FilterEstimate(Estimate,C,DAll,AllObs):
 
     K=P@H.T @ linalg.inv((H@P@H.T+R))
 
-    xminus=empty([DAll.nR*DAll.nt,C.N]); xminus[:]=NaN
-    xplus=empty([DAll.nR*DAll.nt,C.N]); xplus[:]=NaN
+    xminus=empty([DAll.nR*DAll.nt,C.N]); xminus[:]=nan
+    xplus=empty([DAll.nR*DAll.nt,C.N]); xplus[:]=nan
     for i in range(0,C.N):
         xminus[:,i]=Qchain[:,i]    
         xplus[:,i]=xminus[:,i] + (K@(y-H@xminus[:,i].reshape([DAll.nR*DAll.nt,1]))).reshape(DAll.nR*DAll.nt)
