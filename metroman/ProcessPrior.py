@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from numpy import empty,ones,zeros,mean,std,median,exp,maximum,max,full
+from numpy import empty,ones,zeros,mean,std,median,exp,maximum,full,log
 from numpy.random import randn,rand,seed
 from scipy.stats import lognorm
 import time
 from metroman.logninvstat import logninvstat
 from metroman.calcnhat import calcnhat
 from metroman.MetroManVariables import Jump
+import sys
+
+ε=sys.float_info.epsilon
 
 def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.05):
     #%% 1 handle input prior information
@@ -158,7 +161,8 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
             Abarv=median(Av)
                         
             if A0v<allA0min[j]:
-                pv1=0; fv=0; pv1A=0;
+                #pv1=0; fv=0; pv1A=0;
+                pv1=ε; fv=ε; pv1A=ε;
             else:
                 pv1=1
                 Qv=mean( 1/nhatu * (Av)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 )
@@ -168,7 +172,15 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
                 else:
                     pv1A=1
             
-            MetRatio=fv/fu*pv1/pu1*pv1A/pu1A
+            fv=max(fv,ε)
+            fu=max(fu,ε)
+            pu1=max(pu1,ε)
+            pv1=max(pv1,ε)
+            pu1A=max(pu1A,ε)
+            pv1A=max(pv1A,ε)
+            logMetRatio=log(fv)-log(fu)+log(pv1)-log(pu1)+log(pv1A)-log(pu1A)
+            MetRatio=exp(logMetRatio)
+            #MetRatio=fv/fu*pv1/pu1*pv1A/pu1A
             
             if MetRatio > u1[j,i]:
                 na1[j]=na1[j]+1
@@ -178,7 +190,8 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
             #na
             nav=nau+z2[j,i]*jstdna
             if nav <= 0:
-                pv2=0
+                #pv2=0
+                pv2=ε
             else:
                 pv2=lognorm.pdf(nav,sigman[j],0,exp(mun[j]))
             
@@ -186,7 +199,13 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
             Qv=mean( 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 ) 
             fv=lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
             
-            MetRatio=fv/fu*pv2/pu2
+            #MetRatio=fv/fu*pv2/pu2
+            fu=max(fu,ε)
+            fv=max(fv,ε)
+            pu2=max(pu2,ε)
+            pv2=max(pv2,ε)
+            logMetRatio=log(fv)-log(fu)+log(pv2)-log(pu2)
+            MetRatio=exp(logMetRatio)
             
             if MetRatio >u2[j,i]:
                 na2[j]=na2[j]+1
@@ -197,19 +216,26 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
             x1v=x1u+z3[j,i]*jstdx1
             if E.nOpt<5:
                 if x1v >=0:
-                    pv3=0
+                    pv3=ε
                 else:
                     pv3=lognorm.pdf(-x1v,sigmax1[j],0,exp(mux1[j]) )
             elif E.nOpt==5:
                 if x1v <0:
-                    pv3=0
+                    pv3=ε
                 else:
                     pv3=lognorm.pdf(x1v,sigmax1[j],0,exp(mux1[j]) )
                 
             nhatv = calcnhat(AllObs.w[j,:],AllObs.h[j,:],AllObs.hmin[j],A0u+AllObs.dA[j,:],x1v,nau,E.nOpt)
             Qv=mean( 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 ) 
             fv=lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
-            MetRatio=fv/fu*pv3/pu3
+
+            #MetRatio=fv/fu*pv3/pu3
+            fu=max(fu,ε)
+            fv=max(fv,ε)
+            pu3=max(pu3,ε)
+            pv3=max(pv3,ε)
+            logMetRatio=log(fv)-log(fu)+log(pv3)-log(pu3)
+            MetRatio=exp(logMetRatio)
             
             if MetRatio >u3[j,i]:
                 na3[j]=na3[j]+1
