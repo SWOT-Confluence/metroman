@@ -24,10 +24,10 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
     if Prior.Monthly:
         Prior.meanQbar=mean(QtPrior)
 
-    #if Prior.Monthly:
-    #    #Prior.covQbar*=12**0.5
-    #    Prior.covQbar*=DAll.nt**0.5
-    #    print('increasing uncerainty to account for correlation among timeseries. now set to:',Prior.covQbar)
+    if Prior.Monthly:
+        #Prior.covQbar*=12**0.5
+        Prior.covQbar*=DAll.nt**0.5
+        print('increasing uncerainty to account for correlation among timeseries. now set to:',Prior.covQbar)
 
     # 1 handle input prior information
     # note that A0min is refined for inclusion in the "jmp" variable at the bottom
