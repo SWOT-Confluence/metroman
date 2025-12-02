@@ -1,20 +1,36 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from numpy import empty,ones,zeros,mean,std,median,exp,maximum,full,log
+from numpy import empty,ones,zeros,mean,std,median,exp,maximum,full,log,array,float64,finfo,clip,isnan
 from numpy.random import randn,rand,seed
 from scipy.stats import lognorm
+from scipy.special import logsumexp
 import time
 from metroman.logninvstat import logninvstat
 from metroman.calcnhat import calcnhat
 from metroman.MetroManVariables import Jump
 import sys
 
-ε=sys.float_info.epsilon
+#ε=sys.float_info.epsilon
+ε=10*finfo(float64).tiny
 
 def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.05):
-    #%% 1 handle input prior information
-    #% note that A0min is refined for inclusion in the "jmp" variable at the bottom
+    # 0 handle monthly discharge
+    QtPrior=[]
+    for t in Prior.tmonth:
+        QtPrior.append(Prior.meanQbarMonthly[t-1])
+    QtPrior=array(QtPrior)
+
+    if Prior.Monthly:
+        Prior.meanQbar=mean(QtPrior)
+
+    #if Prior.Monthly:
+    #    #Prior.covQbar*=12**0.5
+    #    Prior.covQbar*=DAll.nt**0.5
+    #    print('increasing uncerainty to account for correlation among timeseries. now set to:',Prior.covQbar)
+
+    # 1 handle input prior information
+    # note that A0min is refined for inclusion in the "jmp" variable at the bottom
     allA0min=empty((DAll.nR,1))
     for i in range(0,DAll.nR):
         if min(AllObs.dA[i,:] ) >= 0:
@@ -60,6 +76,12 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
     
     v=(Prior.covQbar*Prior.meanQbar)**2
     [muQbar,sigmaQbar] = logninvstat(Prior.meanQbar,v)    
+
+    muQbar_t=empty( (DAll.nt,))
+    sigmaQbar_t=empty( (DAll.nt,))
+    for i,Qbar_i in enumerate(QtPrior):
+        v=(Prior.covQbar*Qbar_i)**2
+        [muQbar_t[i],sigmaQbar_t[i]] = logninvstat(Qbar_i,v)    
     
     #%%  chain setup
     N=int(1e4) 
@@ -117,6 +139,7 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
         x1u=thetax1[j,0]
         
         jstdA0=A0u
+        #jstdA0=0.25*A0u
         jstdna=nau
         jstdx1=0.1*x1u
         
@@ -128,8 +151,8 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
         if Prior.Geomorph.Use:
             pu1A=lognorm.pdf(Abaru,Prior.Geomorph.logA0_sigma,0,exp(Prior.Geomorph.logA0_hat))
         else:
-            pu1A=1
-        pu1=1
+            pu1A=float64(1)
+        pu1=float64(1)
         pu2=lognorm.pdf(nau,sigman[j],0,exp(mun[j]))
         if E.nOpt<5:
             pu3=lognorm.pdf(-x1u,sigmax1[j],0,exp(mux1[j]) )
@@ -138,12 +161,23 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
         
         nhatu = calcnhat(AllObs.w[j,:],AllObs.h[j,:],AllObs.hmin[j],A0u+AllObs.dA[j,:],x1u,nau,E.nOpt)
         
-        Qu = mean( 1/nhatu * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 )
-        
-        fu = lognorm.pdf(Qu,sigmaQbar,0,exp(muQbar) )
-        
+        #Qu = mean( 1/nhatu * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 )
+        Qut =  1/nhatu * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 
+        Qu = mean( Qut)
+
+        if Prior.Monthly:
+            fut=lognorm.pdf(Qut,sigmaQbar_t,0,exp(muQbar_t))
+            clip(fut,ε,None,out=fut)
+            fu=exp(sum(log(fut)))
+            print('Using Monthly Prior')
+            #print('fut=',fut)
+            #print('type fu=',type(fu))
+        else:
+            print('Using traditional long-term average Prior')
+            fu = lognorm.pdf(Qu,sigmaQbar,0,exp(muQbar) )
+        #print('fu=',fu)
+
         for i in range(0,N):
-            
             
             #adaptation
             if i<N*0.2 and i>0 and i%100==0:
@@ -164,13 +198,20 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
                 #pv1=0; fv=0; pv1A=0;
                 pv1=ε; fv=ε; pv1A=ε;
             else:
-                pv1=1
-                Qv=mean( 1/nhatu * (Av)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 )
-                fv = lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
+                pv1=float64(1)
+                #Qv=mean( 1/nhatu * (Av)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 )
+                Qvt= 1/nhatu * (Av)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 
+                Qv=mean( Qvt )
+                if Prior.Monthly:
+                    fvt=lognorm.pdf(Qvt,sigmaQbar_t,0,exp(muQbar_t))
+                    clip(fvt,ε,None,out=fvt)
+                    fv=exp(sum(log(fvt)))
+                else:
+                    fv = lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
                 if Prior.Geomorph.Use:
                     pv1A=lognorm.pdf(Abarv,Prior.Geomorph.logA0_sigma,0,exp(Prior.Geomorph.logA0_hat))
                 else:
-                    pv1A=1
+                    pv1A=float64(1)
             
             fv=max(fv,ε)
             fu=max(fu,ε)
@@ -196,8 +237,15 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
                 pv2=lognorm.pdf(nav,sigman[j],0,exp(mun[j]))
             
             nhatv = calcnhat(AllObs.w[j,:],AllObs.h[j,:],AllObs.hmin[j],A0u+AllObs.dA[j,:],x1u,nav,E.nOpt)
-            Qv=mean( 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 ) 
-            fv=lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
+            #Qv=mean( 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 ) 
+            Qvt= 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5  
+            Qv=mean( Qvt)
+            if Prior.Monthly:
+                fvt=lognorm.pdf(Qvt,sigmaQbar_t,0,exp(muQbar_t))
+                clip(fvt,ε,None,out=fvt)
+                fv=exp(sum(log(fvt)))
+            else:
+                fv=lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
             
             #MetRatio=fv/fu*pv2/pu2
             fu=max(fu,ε)
@@ -211,6 +259,7 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
                 na2[j]=na2[j]+1
                 nau=nav; Qu=Qv;
                 fu=fv; pu2=pv2;
+                nhatu=nhatv
                 
             #x1
             x1v=x1u+z3[j,i]*jstdx1
@@ -226,8 +275,16 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
                     pv3=lognorm.pdf(x1v,sigmax1[j],0,exp(mux1[j]) )
                 
             nhatv = calcnhat(AllObs.w[j,:],AllObs.h[j,:],AllObs.hmin[j],A0u+AllObs.dA[j,:],x1v,nau,E.nOpt)
-            Qv=mean( 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 ) 
-            fv=lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
+            #Qv=mean( 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5 ) 
+            Qvt= 1/nhatv * (Au)**(5/3) * AllObs.w[j,:]**(-2/3)* AllObs.S[j,:]**0.5  
+            Qv=mean( Qvt)
+            if Prior.Monthly:
+                fvt=lognorm.pdf(Qvt,sigmaQbar_t,0,exp(muQbar_t))
+                clip(fvt,ε,None,out=fvt)
+                fv=exp(sum(log(fvt)))
+            else:
+                fv=lognorm.pdf(Qv,sigmaQbar,0,exp(muQbar) )
+
 
             #MetRatio=fv/fu*pv3/pu3
             fu=max(fu,ε)
@@ -241,7 +298,7 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
                 na3[j]=na3[j]+1
                 x1u=x1v; Qu=Qv;
                 fu=fv; pu3=pv3;
-            
+                nhatu=nhatv
             
             thetaAllA0[j,i]=A0u
             thetana[j,i]=nau
@@ -264,6 +321,12 @@ def ProcessPrior(Prior,AllObs,DAll,Obs,D,ShowFigs,E,R,DebugMode,Verbose,covna=0.
 
     if Verbose:
         print('Prior meanAllA0=',Prior.meanAllA0)
+        print('Prior stdAllA0=',Prior.stdAllA0)
+
+    if Verbose:
+        print('Acceptance rate for A0=',na1/N)
+        print('Acceptance rate for na =',na2/N)
+        print('Acceptance rate for x1=',na3/N)
 
     if Verbose:
        print('Target Qbar=',Prior.meanQbar)

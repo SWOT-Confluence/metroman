@@ -68,6 +68,7 @@ class Prior:
     def  __init__(self,D):
         from numpy import empty           
         self.meanQbar=[] #mean of the prior estimate of mean annual flow [m^3/s]
+        self.meanQbarMonthly=[] #mean of the prior estimate of mean annual flow [m^3/s]
         self.covQbar=[] #coefficient of variation of the prior estimate of mean annual flow [-]
         self.meanAllA0=empty( (D.nR,1) )
         self.stdAllA0=empty( (D.nR,1) )
