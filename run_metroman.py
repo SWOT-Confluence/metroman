@@ -207,7 +207,8 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         AllObs.sigh=0.15
         #AllObs.sigw=10
         #AllObs.sigw=20
-        AllObs.sigw=np.nan #set to nan to trigger proportional estimate after widths read in
+        AllObs.sigw=40
+        #AllObs.sigw=np.nan #set to nan to trigger proportional estimate after widths read in
     else:
         AllObs=0.
 
@@ -473,7 +474,7 @@ def set_up_experiment(DAll, Qbar, QbarMonthly):
     P.Geomorph.Use=False
     # this is for Laterals=false
     P.AllLats.q=zeros((DAll.nR,DAll.nt))
-    P.Monthly=True
+    P.Monthly=False
 
     # assign times -> months for priors
     #epoch = datetime.datetime(2000,1,1,0,0,0)
@@ -513,6 +514,11 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
         Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]
     AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
     Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
+
+    # rescale uncertainty
+    if P.Monthly:
+        P.covQbar=min(1.0,P.covQbar*DAll.nt**0.5)
+        print('increasing uncertainty to account for correlation among timeseries. now set to:',P.covQbar)
 
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
 
