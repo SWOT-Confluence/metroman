@@ -81,7 +81,7 @@ def get_domain_obs(nr):
 
 def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths):
     """ Retrieves data from SWOT and SoS files, populates observation object and
-    returns : Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+    returns : Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
         overlap_ts: the overlapping time indices without any bad data removed
         SetQuality : 
             0 : nominal: 3+ reaches, 4+ times (make nRmin a parameter, and link everything to ntmin) 
@@ -207,14 +207,12 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         AllObs.sigh=0.15
         #AllObs.sigw=10
         #AllObs.sigw=20
-        AllObs.sigw=40
-        #AllObs.sigw=np.nan #set to nan to trigger proportional estimate after widths read in
+        AllObs.sigw=np.nan #set to nan to trigger proportional estimate after widths read in
     else:
         AllObs=0.
 
     # 1. read observations
     Qbar=empty(DAll.nR)
-    QbarMonthly=empty( (DAll.nR,12) )
     reach_length=empty(DAll.nR)
     dist_out=empty(DAll.nR)
 
@@ -230,7 +228,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         SetQuality=3
         iDelete=0
         nDelete=0
-        return Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
     # 1.1.1 check that there are at least some observation times
     if DAll.nt<ntmin_prior:
@@ -241,7 +239,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         SetQuality=2
         iDelete=0
         nDelete=0
-        return Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
     #1.1.2 verify that if we are using constrained width or d_x_area that 
     #        we have the right data to do so. else, switch modes
@@ -293,7 +291,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
             # overlap_ts = []
             overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
 
-            return Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+            return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
 
         # 1.2.3 read height, width and slope; optionally cross-sectional area
@@ -325,12 +323,9 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         sos_dataset=Dataset(sosfile)
         
         sosreachids=sos_dataset["reaches/reach_id"][:]
-        sosQbars=sos_dataset["model/mean_q"][:].filled(np.nan)
+        sosQbars=sos_dataset["model/mean_q"][:]
         k=np.argwhere(sosreachids == float(reach["reach_id"]))
-        k=int(k)
-        #Qbar[i]=sosQbars[k].filled(np.nan) #TODO throws a warning with numpy > 1.25. fix array-scalar mapping
-        Qbar[i]=sosQbars[k]
-        QbarMonthly[i,:]=sos_dataset['model']['monthly_q'][k,:]
+        Qbar[i]=sosQbars[k].filled(np.nan) #TODO throws a warning with numpy > 1.25. fix array-scalar mapping
 
         if np.isnan(Qbar[i]):
              if Verbose:
@@ -392,7 +387,6 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
 
     DAll.nt -= nDelete
     talli=np.delete(talli,iDelete)
-    DAll.tall=np.delete(tall,iDelete)
 
     if Verbose:
         print('after filtering bad data')
@@ -416,7 +410,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
         iDelete=0
         nDelete=0
         
-        return Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts, areaswitch
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts, areaswitch
 	
     #DAll.dt=empty(DAll.nt-1)
     #for i in range(DAll.nt-1):
@@ -443,9 +437,9 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths
     if areaswitch == 1:
         AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
 
-    return Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+    return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
-def set_up_experiment(DAll, Qbar, QbarMonthly):
+def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
     Chain, Random Seed, Expriment and Prior."""
 
@@ -459,14 +453,15 @@ def set_up_experiment(DAll, Qbar, QbarMonthly):
 
     tUseMax=min(31,DAll.nt)
 
-    Exp.tUse=array([0,	tUseMax]) 
+    #Exp.tUse=array([1,	31])
+    #Exp.tUse=array([1,	tUseMax-1]) #should this be 0,tUse? why is it tUseMax-1?
+    Exp.tUse=array([0,	tUseMax]) #why is it tUseMax-1?
 
     Exp.nOpt=5
     #Exp.nOpt=4
 
     P=Prior(DAll)
     P.meanQbar=mean(Qbar)
-    P.meanQbarMonthly=mean(QbarMonthly,axis=0)
     #P.covQbar=0.5
     P.covQbar=0.25
     P.eQm=0.075
@@ -474,14 +469,6 @@ def set_up_experiment(DAll, Qbar, QbarMonthly):
     P.Geomorph.Use=False
     # this is for Laterals=false
     P.AllLats.q=zeros((DAll.nR,DAll.nt))
-    P.Monthly=False
-
-    # assign times -> months for priors
-    #epoch = datetime.datetime(2000,1,1,0,0,0)
-    #tall = [ epoch + datetime.timedelta(hours=int(t)) for t in overlap_ts ]
-    #tmonth = [t.month for t in tall]
-    P.tmonth= [t.month for t in DAll.tall]
-
     return C, R, Exp, P
 
 def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
@@ -503,6 +490,7 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
     ShowFigs=False
     DebugMode=False
 
+
     #Smin=1.7e-5
     Smin=5e-5
     Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
@@ -514,11 +502,6 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
         Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]
     AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
     Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
-
-    # rescale uncertainty
-    if P.Monthly:
-        P.covQbar=min(1.0,P.covQbar*DAll.nt**0.5)
-        print('increasing uncertainty to account for correlation among timeseries. now set to:',P.covQbar)
 
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
 
@@ -745,8 +728,8 @@ def main():
             sosdir = tmpdir
         else:
             sosdir = inputdir.joinpath("sos")
-        Qbar,QbarMonthly,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch =\
-            retrieve_obs(reachlist,inputdir,sosdir,Verbose,areaswitch,constrainwidths)
+        Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch = retrieve_obs(
+            reachlist,inputdir,sosdir,Verbose,areaswitch,constrainwidths)
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")
@@ -787,7 +770,7 @@ def main():
         iDelete=0
     else:
         #2.1 set up experiment
-        C, R, Exp, P = set_up_experiment(DAll, Qbar, QbarMonthly)
+        C, R, Exp, P = set_up_experiment(DAll, Qbar)
 
         if Verbose:
              print('Using window',Exp.tUse)

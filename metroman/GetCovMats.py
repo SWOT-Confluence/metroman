@@ -21,6 +21,15 @@ def GetCovMats(D,Obs,Prior):
     Obs.Ch=Obs.sigh**2 * eye(M)
     Obs.Cw=Obs.sigw**2 * eye(M)
     Obs.CS=Obs.sigS**2 * eye(M)
+
+    print('shape Obs.wv=',np.shape(Obs.wv))
+    print('D.dt=',D.dt)
+    print('shape D.dt=',np.shape(D.dt))
+    print('D.nt=',D.nt)
+    print('D.nR=',D.nR)
+    print('shape B=',np.shape(B))
+    print('M=',M)
+    print('N=',N)
     
     # calculate Jacobian of the dAdt term wrt h and w
     Obs.JAh=(B @ Obs.wv @ ones((1,M)))*DeltaA/(D.dt @ ones((1,M)))
