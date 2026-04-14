@@ -23,7 +23,8 @@ from metroman.MetroManVariables import Domain,Observations,Chain,RandomSeeds,Exp
 from metroman.MetropolisCalculations import MetropolisCalculations
 from metroman.ProcessPrior import ProcessPrior
 from metroman.SelObs import SelObs
-
+from metroman.ConstrainWidth import ConstrainWidth
+from metroman.FilterEstimate import FilterEstimate
 
 def get_reachids(reachjson,index_to_run,tmp_dir,sos_bucket):
     """Extract and return a list of reach identifiers from json file.
@@ -78,14 +79,22 @@ def get_domain_obs(nr):
 
     return DAll, AllObs
 
-def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
+def retrieve_obs(reachlist, inputdir, sosdir, Verbose,areaswitch,constrainwidths):
     """ Retrieves data from SWOT and SoS files, populates observation object and
-    returns : Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
+    returns : Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
         overlap_ts: the overlapping time indices without any bad data removed
         SetQuality : 
             0 : nominal: 3+ reaches, 4+ times (make nRmin a parameter, and link everything to ntmin) 
             1 : fewer reaches or fewer observation times
             2 : no reach with any good observation time
+            3 : there exists a reach in the set that does not have a SWOT timeseries file
+
+        areaswitch : 
+            0 : use original MetroMan-style finite difference area calculations
+            1 : use hypsometric curve cross-sectional area
+        constrainwidths : logical
+
+     ~ Outline ~ 
 
     -1: figure out overlapping times among reaches
      0: set up domain
@@ -95,8 +104,9 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
             1.2.1: open swot file
             1.2.2: check for nt consistency. if not exit. this should never happen
             1.2.3 read height, width and slope
-            1.2.4 read Qbar from SOS
-            1.2.5 read reach length and flow distance
+            1.2.4: optionally constrain widths
+            1.2.5 read Qbar from SOS
+            1.2.6 read reach length and flow distance
      2: select non-fill observations
 
 """
@@ -111,6 +121,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
 
     # extract measured times
     allts=dict()
+    missing_file=False
     for reach in reachlist:
         swotfile=inputdir.joinpath('swot', reach["swot"])
         swot_file_exists=os.path.exists(swotfile)
@@ -122,6 +133,9 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
             swot_dataset.close()
         else:
             nt_reach=0
+            allts[reach['reach_id']]=[]
+            missing_file=True
+            print('at least one SWOT timeseries not found. setting missing_file flag to True')
 
     # determine overlapping measured times and a filter for each reach indicating which times
     #    for that reach are in the overlap
@@ -186,12 +200,14 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
         dt=(tall[i]-tall[0])
         talli[i]=dt.days + dt.seconds/86400.
 
-    if swot_file_exists:   
+    if swot_file_exists and DAll.nt > 0:   
         AllObs=Observations(DAll)
         AllObs.sigS=1.7e-5
-        AllObs.sigh=0.1
+        #AllObs.sigh=0.1
+        AllObs.sigh=0.15
         #AllObs.sigw=10
-        AllObs.sigw=20
+        #AllObs.sigw=20
+        AllObs.sigw=np.nan #set to nan to trigger proportional estimate after widths read in
     else:
         AllObs=0.
 
@@ -205,7 +221,16 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     else:
         SetQuality=0 #initialize to nominal
 
-    # 1.1 check that there are at least some observation times
+    # 1.1 data checks
+    # 1.1.0 check that all files exist
+    if missing_file:
+        print('at least one file is missing. setting SetQuality=3')
+        SetQuality=3
+        iDelete=0
+        nDelete=0
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
+
+    # 1.1.1 check that there are at least some observation times
     if DAll.nt<ntmin_prior:
         if Verbose:
             print('Data issue')
@@ -214,8 +239,26 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
         SetQuality=2
         iDelete=0
         nDelete=0
-        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
+    #1.1.2 verify that if we are using constrained width or d_x_area that 
+    #        we have the right data to do so. else, switch modes
+    if areaswitch == 1:
+       for reach in reachlist:
+           swotfile=inputdir.joinpath('swot', reach["swot"])
+           swot_file_exists=os.path.exists(swotfile)
+           if swot_file_exists and areaswitch == 1:
+               swot_dataset = Dataset(swotfile)
+               d_x_area=swot_dataset["reach/d_x_area"][0:nt_reach].filled(np.nan)
+               if np.all(np.isnan(d_x_area)):
+                   print('no good d_x_area for a reach in this set.  switching to use finite difference style area calcs')
+                   areaswitch = 0
+               h_break=swot_dataset['reach']['hwfit']['h_break'][:].filled(np.nan)
+               if min(h_break)<0:
+                   print('some bad height break data found for a reach in this set. switching to use finite difference style area calcs')
+                   areaswitch=0
+           else: #if there's not a swot file
+               areaswitch = 0
   
     # 1.2 loop over files and extract data
     i=0
@@ -248,19 +291,34 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
             # overlap_ts = []
             overlap_ts=list(np.delete(np.array(overlap_ts),iDelete,0))
 
-            return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts 
+            return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
-        # 1.2.3 read height, width and slope
+
+        # 1.2.3 read height, width and slope; optionally cross-sectional area
         h=swot_dataset["reach/wse"][0:nt_reach].filled(np.nan)
         AllObs.h[i,:]=h[overlap_fs[reach['reach_id']]]
         w=swot_dataset["reach/width"][0:nt_reach].filled(np.nan)
         AllObs.w[i,:]=w[overlap_fs[reach['reach_id']]]
         S=swot_dataset["reach/slope2"][0:nt_reach].filled(np.nan)
         AllObs.S[i,:]=S[overlap_fs[reach['reach_id']]]
+        if areaswitch == 1:
+            d_x_area=swot_dataset["reach/d_x_area"][0:nt_reach].filled(np.nan)
+            AllObs.dA[i,:]=d_x_area[overlap_fs[reach['reach_id']]]
+            #need to add a check for good data. if check comes out bad, switch back to areaswitch =0
+
+
+        # 1.2.4 optionally constrain widths
+        if constrainwidths:
+            area_fit={}
+            area_fit['h_break']=swot_dataset['reach']['hwfit']['h_break'][:]
+            area_fit['fit_coeffs']=swot_dataset['reach']['hwfit']['fit_coeffs'][:] #slope: index 1; intercept: index 0
+            nt=len(AllObs.h[i,:])
+            hhat,what=ConstrainWidth(AllObs.h[i,:],AllObs.w[i,:],area_fit,nt)
+            AllObs.w[i,:]=what
 
         swot_dataset.close()
 
-        # 1.2.4 read Qbar from SOS
+        # 1.2.5 read Qbar from SOS
         sosfile=sosdir.joinpath(reach["sos"])
         sos_dataset=Dataset(sosfile)
         
@@ -275,7 +333,7 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
              SetQuality=2 #cannot run process prior if Qbar is bad
         sos_dataset.close()
 
-        #1.2.5 read reach length and flow distance
+        #1.2.6 read reach length and flow distance
         swordfile=inputdir.joinpath('sword',reach["sword"])
         sword_dataset=Dataset(swordfile)
         swordreachids=sword_dataset["reaches/reach_id"][:]
@@ -293,6 +351,12 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
     DAll.L=reach_length
     DAll.xkm=np.max(dist_out)-dist_out + DAll.L[0]/2 #reach midpoint distance downstream [m]
 
+    # 1.3 optionally set width uncertainties
+    if np.isnan(AllObs.sigw):
+        wbar=np.nanmean(AllObs.w)
+        AllObs.sigw=0.2*wbar
+        print('set sigw to based on 20% ratio to average width',AllObs.sigw)
+
     # 2. select observations that are NOT equal to the fill value
 
     if Verbose:
@@ -301,14 +365,21 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
         print('h=',AllObs.h)
         print('w=',AllObs.w)
         print('S=',AllObs.S)
+        if areaswitch == 1:
+            print('dA=',AllObs.dA)
 
-    iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) | np.any(np.isnan(AllObs.S),0) )
+    if areaswitch == 0:
+        iDelete=np.where( np.any(np.isnan(AllObs.h),0) | np.any(np.isnan(AllObs.w),0) | np.any(np.isnan(AllObs.S),0) )
+    elif areaswitch == 1:
+        iDelete=np.where( np.any(np.isnan(AllObs.dA),0) | np.any(np.isnan(AllObs.w),0) | np.any(np.isnan(AllObs.S),0) )
 
     shape_iDelete=np.shape(iDelete)
     nDelete=shape_iDelete[1]
     AllObs.h=np.delete(AllObs.h,iDelete,1)
     AllObs.w=np.delete(AllObs.w,iDelete,1)
     AllObs.S=np.delete(AllObs.S,iDelete,1)
+    if areaswitch == 1:
+        AllObs.dA=np.delete(AllObs.dA,iDelete,1)
 
     #overlap_ts_all=overlap_ts
 
@@ -323,7 +394,8 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
         print('h=',AllObs.h)
         print('w=',AllObs.w)
         print('S=',AllObs.S)
-
+        if areaswitch == 1:
+            print('dA=',AllObs.dA)
 
     if DAll.nt<ntmin:
         
@@ -338,19 +410,34 @@ def retrieve_obs(reachlist, inputdir, sosdir, Verbose):
         iDelete=0
         nDelete=0
         
-        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts	
+        return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs, overlap_ts, areaswitch
 	
-    DAll.dt=empty(DAll.nt-1)
-    for i in range(DAll.nt-1):
-         DAll.dt[i]=(talli[i+1]-talli[i])*86400
+    #DAll.dt=empty(DAll.nt-1)
+    #for i in range(DAll.nt-1):
+    #     DAll.dt[i]=(talli[i+1]-talli[i])*86400
 
     DAll.t=reshape(talli,[1,DAll.nt])
+    
+    DAll.dt=reshape(diff(DAll.t).T*86400 * ones((1,DAll.nR)),(DAll.nR*(DAll.nt-1),1))
+
+    ## print out h data
+    #if areaswitch == 1:
+    #    import pandas as pd
+    #    for i in range(0,DAll.nR):
+    #        df=pd.DataFrame(data={'h':AllObs.h[i,:],'w':AllObs.w[i,:],'d_x_area':AllObs.dA[i,:]})
+    #        df.to_csv('areatest-reach'+str(i)+'.csv')
+    #        #sys.exit()
+
+    #AllObs.w[:]=104.
 
     # Reshape observations
     AllObs.hv=reshape(AllObs.h, (DAll.nR*DAll.nt,1))
     AllObs.Sv=reshape(AllObs.S, (DAll.nR*DAll.nt,1))
     AllObs.wv=reshape(AllObs.w, (DAll.nR*DAll.nt,1))
-    return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts
+    if areaswitch == 1:
+        AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
+
+    return Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch
 
 def set_up_experiment(DAll, Qbar):
     """Define and set parameters for experiment and return a tuple of 
@@ -367,20 +454,24 @@ def set_up_experiment(DAll, Qbar):
     tUseMax=min(31,DAll.nt)
 
     #Exp.tUse=array([1,	31])
-    Exp.tUse=array([1,	tUseMax-1]) #should this be 0,tUse? why is it tUseMax-1?
+    #Exp.tUse=array([1,	tUseMax-1]) #should this be 0,tUse? why is it tUseMax-1?
+    Exp.tUse=array([0,	tUseMax]) #why is it tUseMax-1?
 
     Exp.nOpt=5
+    #Exp.nOpt=4
 
     P=Prior(DAll)
     P.meanQbar=mean(Qbar)
-    P.covQbar=0.5
-    P.eQm=0.
+    #P.covQbar=0.5
+    P.covQbar=0.25
+    P.eQm=0.075
+    #P.eQm=0.0
     P.Geomorph.Use=False
     # this is for Laterals=false
     P.AllLats.q=zeros((DAll.nR,DAll.nt))
     return C, R, Exp, P
 
-def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality):
+def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch):
     """ 
           Process observations and priors and return an estimate.
 
@@ -391,19 +482,70 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality):
 
     """
     
-    D,Obs,AllObs,DAll,Truth,Prior.Lats.q=SelObs(DAll,AllObs,Exp,[],Prior.AllLats)
+    D,Obs,AllObs,DAll,Truth,Prior.Lats.q=SelObs(DAll,AllObs,Exp,[],Prior.AllLats,areaswitch)
     Prior.Lats.qv=reshape(Prior.Lats.q,(D.nR*(D.nt-1),1))
-    Obs=CalcdA(D,Obs)
-    AllObs=CalcdA(DAll,AllObs)
+    if areaswitch == 0:
+        Obs=CalcdA(D,Obs)
+        AllObs=CalcdA(DAll,AllObs)
     ShowFigs=False
     DebugMode=False
+
 
     #Smin=1.7e-5
     Smin=5e-5
     Obs.S[Obs.S<Smin]=putmask(Obs.S,Obs.S<Smin,Smin) #limit slopes to a minimum value
     AllObs.S[AllObs.S<Smin]=putmask(AllObs.S,AllObs.S<Smin,Smin)
 
+    # recenter dA on zero
+    for i in range(DAll.nR):
+        AllObs.dA[i,:]=AllObs.dA[i,:]-np.nanmedian(AllObs.dA[i,:])
+        Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]
+    AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
+    Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
+
     P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose)
+
+    # if ProcessPrior doesn't work, try allowing resistance to increase
+    if not np.all(P.Success):
+        itermax=3
+        iter_p=0
+        pitersdone=False
+        while not pitersdone:
+            iter_p+=1
+            covna_i=iter_p*.5
+            print('Process Prior Unsuccessful. Incraesing resistance uncertainty, iteration=',iter_p,'covna=',covna_i,'...')
+            P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose,covna=covna_i)
+            print('... on this iteration, ProcessPrior estimated na=',P.meanna)
+            if iter_p == itermax or np.all(P.Success):
+                pitersdone=True
+
+    # check on case where erroneous low values of dA prevent ProcessPrior correctly estimating Qbar
+    if not np.all(P.Success):
+        itermax=3
+        iter_p=0
+        pitersdone=False
+        while not pitersdone:
+            iter_p+=1
+            print('Process Prior Unsuccessful. Clipping dA, iteration=',iter_p)
+            print('Before clip dA=',AllObs.dA)
+            for i in range(DAll.nR):
+                if not P.Success[i]:
+                    mindA_set=np.quantile(AllObs.dA[i,:],.1*iter_p)
+                    dAclip=np.clip(AllObs.dA[i,:],mindA_set,np.inf)
+                    AllObs.dA[i,:]=dAclip
+            # recalculate derived estimates
+            for i in range(0,DAll.nR):
+                Obs.dA[i,:]=AllObs.dA[i,Exp.iEst]
+            AllObs.dAv=reshape(AllObs.dA, (DAll.nR*DAll.nt,1))
+            Obs.dAv=reshape(Obs.dA, (D.nR*D.nt,1) )
+
+            print('After clip dA=',AllObs.dA)
+            P,jmp=ProcessPrior(P,AllObs,DAll,Obs,D,ShowFigs,Exp,R,DebugMode,Verbose,covna=1.0)
+
+            if iter_p == itermax or np.all(P.Success):
+                pitersdone=True
+
+    print('after process prior. areaswich=',areaswitch)
 
     if SetQuality == 1:
         print('SetQuality=',SetQuality,'. returning from process function with only priors')
@@ -411,9 +553,11 @@ def process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality):
         return Estimate,P
 
     Obs,P2=GetCovMats(D,Obs,Prior) #why does this use Prior instead of P? what is P2?
+    AllObs,P2=GetCovMats(DAll,AllObs,Prior) #why does this use Prior instead of P? what is P2?
 
     C=MetropolisCalculations(P,D,Obs,jmp,C,R,DAll,AllObs,Exp.nOpt,DebugMode,Verbose)
     Estimate,C=CalculateEstimates(C,D,Obs,P,DAll,AllObs,Exp.nOpt) 
+    Estimate=FilterEstimate(Estimate,C,DAll,AllObs)
     return Estimate,P
 
 def write_output(outputdir, reachids, Estimate, Prior,iDelete, nDelete, SetQuality,overlap_ts):
@@ -433,6 +577,7 @@ def write_output(outputdir, reachids, Estimate, Prior,iDelete, nDelete, SetQuali
 
     if SetQuality == 0:
         Estimate.AllQ=np.insert(Estimate.AllQ,iInsert,fillvalue,1)
+        Estimate.QhatPostf=np.insert(Estimate.QhatPostf,iInsert,fillvalue,1)
         Estimate.QhatUnc_HatAllAll=np.insert(Estimate.QhatUnc_HatAllAll,iInsert,fillvalue,1)
     elif SetQuality == 1:
         Estimate.QhatAllPrior=np.insert(Estimate.QhatAllPrior,iInsert,fillvalue,1)
@@ -483,7 +628,8 @@ def write_output(outputdir, reachids, Estimate, Prior,iDelete, nDelete, SetQuali
         A0[:] = Estimate.A0hat
         na[:] = Estimate.nahat
         x1[:] = Estimate.x1hat
-        allq[:] = Estimate.AllQ
+        #allq[:] = Estimate.AllQ
+        allq[:] = Estimate.QhatPostf
         qu[:] = Estimate.QhatUnc_HatAllAll
     elif SetQuality ==1: #estimates  based on process prior only
         A0[:]=Prior.meanA0
@@ -560,6 +706,10 @@ def main():
         outputdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/output")
         tmpdir = Path("/home/mdurand_umass_edu/dev-confluence/mnt/tmp")
 
+    # 0.4 specify width constraint, and area switches
+    areaswitch=1 #  0: original; 1: use river hypsometry
+    constrainwidths=True
+
     # 1 get data
     # 1.0 figure out json file. pull from command line arg or set to default
     reachjson = inputdir.joinpath(args.reachjson)
@@ -578,7 +728,8 @@ def main():
             sosdir = tmpdir
         else:
             sosdir = inputdir.joinpath("sos")
-        Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts = retrieve_obs(reachlist,inputdir,sosdir,Verbose)
+        Qbar,iDelete,nDelete,SetQuality,DAll,AllObs,overlap_ts,areaswitch = retrieve_obs(
+            reachlist,inputdir,sosdir,Verbose,areaswitch,constrainwidths)
     else:
         if Verbose:
             print("No reaches in list for this inversion set. ")
@@ -586,7 +737,7 @@ def main():
         return
 
     # 2. run metroman
-    if SetQuality == 2:
+    if SetQuality >= 2:
         #2.0 if inversion set is invalid, set data to fill values 
         fillvalue=-999999999999
 	    #define and write fill value data
@@ -625,12 +776,15 @@ def main():
              print('Using window',Exp.tUse)
 
         #2.2 process experiment
-        Estimate,P = process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality)
+        Estimate,P = process(DAll, AllObs, Exp, P, R, C, Verbose,SetQuality,areaswitch)
         print("SUCCESS. MetroMan ran for this set. ")
     
     #3. write output files
-    reachids = [ str(e["reach_id"]) for e in reachlist ]
-    write_output(outputdir, reachids, Estimate,P,iDelete,nDelete,SetQuality,overlap_ts)
+    if SetQuality < 3:
+        reachids = [ str(e["reach_id"]) for e in reachlist ]
+        write_output(outputdir, reachids, Estimate,P,iDelete,nDelete,SetQuality,overlap_ts)
+    else:
+        print('MetroMan will not write output file for this set')
 
 if __name__ == "__main__":
    main()    
